@@ -1,0 +1,89 @@
+name: Python CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Optional - run tests or lint (add when you have them)
+      # - name: Run tests
+      #   run: pytest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Setup SSH for Deployment
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 154.53.42.27 >> ~/.ssh/known_hosts
+
+      # Step 3: Deploy to server
+      - name: Deploy to server
+        run: |
+          ssh admin@154.53.42.27 << 'EOF'
+            # If repository exists, back up .env and pull latest; otherwise clone
+            if [ -d ~/GiftifyAI ]; then
+              if [ -f ~/GiftifyAI/.env ]; then
+                cp ~/GiftifyAI/.env ~/.env.GiftifyAI.bak
+              fi
+              cd ~/GiftifyAI
+              git reset --hard origin/main
+              git pull origin main
+            else
+              git clone https://github.com/zealits/GiftifyAI.git ~/GiftifyAI
+              cd ~/GiftifyAI
+            fi
+
+            # Restore .env if backup exists
+            if [ -f ~/.env.GiftifyAI.bak ]; then
+              mv ~/.env.GiftifyAI.bak .env
+            fi
+
+            # Install Python dependencies (using python3 on server)
+            python3 -m pip install -r requirements.txt
+
+            # Restart the application using PM2
+            if pm2 list | grep -q "GiftifyAI"; then
+              echo "Restarting GiftifyAI"
+              pm2 restart GiftifyAI
+            else
+              echo "Starting GiftifyAI"
+              pm2 start run.py --name GiftifyAI --interpreter python3
+            fi
+
+            pm2 list
+          EOF
