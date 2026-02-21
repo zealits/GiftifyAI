@@ -13,20 +13,21 @@ app = FastAPI(title="Gift Card API", description="Two-tier gift card description
 
 
 class DescribeRequest(BaseModel):
-    giftcard_name: str
     prompt: str
+    industry_type: str  # e.g. retail, hospitality, healthcare — used to infer target audience and curate copy
 
 
 class DescribeResponse(BaseModel):
     descriptions_medium: list[str]  # 2 choices
     descriptions_short: list[str]   # 2 choices
     tags: list[str]                 # ~10 tags
-    giftcard_name_suggestions: list[str]  # 5 refactored names
+    giftcard_name_suggestions: list[str]  # 5 suggested names from prompt
 
 
 class ImageRequest(BaseModel):
     giftcard_name: str
     description: str
+    industry_type: str  # used to infer target audience and curate imagery
 
 
 class ImageResponse(BaseModel):
@@ -51,7 +52,7 @@ def tier1_describe(
 ):
     try:
         result = generate_description_and_tag(
-            client, body.giftcard_name, body.prompt, "tier1"
+            client, body.prompt, body.industry_type, "tier1"
         )
         return DescribeResponse(
             descriptions_medium=result["descriptions_medium"],
@@ -70,7 +71,7 @@ def tier1_image(
 ):
     try:
         b64, media_type = generate_image(
-            client, body.giftcard_name, body.description, "tier1"
+            client, body.giftcard_name, body.description, body.industry_type, "tier1"
         )
         return ImageResponse(image_base64=b64, media_type=media_type)
     except Exception as e:
@@ -84,7 +85,7 @@ def tier2_describe(
 ):
     try:
         result = generate_description_and_tag(
-            client, body.giftcard_name, body.prompt, "tier2"
+            client, body.prompt, body.industry_type, "tier2"
         )
         return DescribeResponse(
             descriptions_medium=result["descriptions_medium"],
@@ -103,7 +104,7 @@ def tier2_image(
 ):
     try:
         b64, media_type = generate_image(
-            client, body.giftcard_name, body.description, "tier2"
+            client, body.giftcard_name, body.description, body.industry_type, "tier2"
         )
         return ImageResponse(image_base64=b64, media_type=media_type)
     except Exception as e:
